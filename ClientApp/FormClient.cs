@@ -1,3 +1,4 @@
+using ClientApp.NetTools;
 using System.Net.Sockets;
 using System.Text;
 
@@ -5,8 +6,6 @@ namespace ClientApp
 {
     public partial class FormClient : Form
     {
-
-
         public FormClient()
         {
             InitializeComponent();
@@ -27,44 +26,80 @@ namespace ClientApp
             string serverIP = tbServerIP.Text.Trim();
             string serverPort = tbServerPort.Text.Trim();
             string requestFileName = tbRequestFileName.Text.Trim();
-            string saveFilePath = tbSaveFilePath.Text.Trim() + requestFileName;
+            string saveFilePath = tbSaveFilePath.Text.Trim();
 
+            DownloadFile(serverIP, serverPort, requestFileName, saveFilePath);
+        }
+
+        // todo:non-public
+        public bool DownloadFile(string serverIP, string serverPort, string requestFileName, string saveFilePath)
+        {
             // examine data correction
             int serverPortNum;
             if(!int.TryParse(serverPort, out serverPortNum)) {
-                MessageBox.Show("Invalid Server Port.");
-                return;
+                tbDownloadResult.Text = "Invalid server port.";
+                return false;
             }
 
             // establish connection to server
-            TcpClient tcpClient = new TcpClient();
-            tcpClient.Connect(serverIP, serverPortNum);
+            ISocket socketHelper;
+            //if(UnitTestDetector.IsRunningFromNUnit)
+            //    socketHelper = new SocketHelperMock();
+            //else
+                socketHelper = new SocketHelper();
+
+            if(!socketHelper.Connect(serverIP, serverPortNum)) {
+                tbDownloadResult.Text = "Fail to connect server.";
+                return false;
+            }
 
             // request : file name
-            byte[] sendData = Encoding.ASCII.GetBytes(requestFileName);
-            tcpClient.Client.Send(sendData);
+            socketHelper.Send(requestFileName);
 
             // response
-            byte[] data = new byte[1024 * 5000];
-            tcpClient.Client.Receive(data);
-            string fileState = Encoding.ASCII.GetString(data).TrimEnd('\0');
+            bool downloadSuccess = true;
+            string fileState = socketHelper.GetFileState();
             switch(fileState) {
                 case "File exists":
-                    int receivedBytesLen = tcpClient.Client.Receive(data);
-                    using(BinaryWriter bWrite = new BinaryWriter(File.Open(saveFilePath, FileMode.Append))) {
-                        bWrite.Write(data, 0, receivedBytesLen);
+                    byte[] fileData = socketHelper.GetFileData();
+
+                    // create directory if not exists
+                    if(!Directory.Exists(saveFilePath))
+                        try {
+                            Directory.CreateDirectory(saveFilePath);
+                        }
+                        catch(Exception ex) {
+                            tbDownloadResult.Text = ex.Message;
+                            downloadSuccess = false;
+                            break;
+                        }
+
+                    // fix saveFilePath
+                    if(!saveFilePath.EndsWith("\\"))
+                        saveFilePath += "\\";
+
+                    using(BinaryWriter bWrite = new BinaryWriter(File.Open(saveFilePath + requestFileName, FileMode.Append))) {
+                        try {
+                            bWrite.Write(fileData, 0, fileData.Length);
+                            tbDownloadResult.Text = "File downloaded.";
+                        }
+                        catch(Exception ex) {
+                            tbDownloadResult.Text = ex.Message;
+                        }
                     }
-                    tbDownloadResult.Text = "File downloaded.";
                     break;
                 case "File not exists":
                     tbDownloadResult.Text = "File not exists.";
                     break;
                 default:
+                    downloadSuccess = false;
                     break;
             }
 
             // close connection
-            tcpClient.Close();
+            socketHelper.Disconnect();
+
+            return downloadSuccess;
         }
     }
 }
