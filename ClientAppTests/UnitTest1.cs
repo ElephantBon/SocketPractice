@@ -1,5 +1,6 @@
 using ClientApp;
 using ClientApp.NetTools;
+using NSubstitute;
 
 namespace ClientAppTests
 {
@@ -10,10 +11,11 @@ namespace ClientAppTests
         [InlineData("127.0.0.1", "8001", "test.txt", @"D:\Downloads\", false)]
         [InlineData("127.0.0.1", "abcd", "test.txt", @"D:\Downloads\", false)]
         [InlineData("127.0.0.1", "8000", "test.txt", @"H:\Downloads\", false)]
-        public void DownloadFileTest_ReturnTrue(string serverIP, string serverPort, string requestFileName, string saveFilePath, bool expected)
+        public void DownloadFileTest_ReturnBool(string serverIP, string serverPort, string requestFileName, string saveFilePath, bool expected)
         {
             // arrange
-            var sut = new FormClient();
+            var nsubSocketHelperMock = Substitute.For<SocketHelperMock>();
+            var sut = new FormClientViewModel(nsubSocketHelperMock);
 
             // act
             var actual = sut.DownloadFile(serverIP, serverPort, requestFileName, saveFilePath);
@@ -25,9 +27,8 @@ namespace ClientAppTests
         [Theory]
         [InlineData("127.0.0.1", 8000, true)]
         [InlineData("127.0.0.1", 8001, false)]
-        public void SocketHelperConnectTest_ReturnTrue(string serverIP, int serverPort, bool expected)
+        public void SocketHelperConnectTest_ReturnBool(string serverIP, int serverPort, bool expected)
         {
-
             // arrange
             var sut = new SocketHelperMock();
 
